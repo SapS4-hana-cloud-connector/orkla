@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:dw="http://www.mulesoft.org/schema/mule/ee/dw" xmlns:sftp="http://www.mulesoft.org/schema/mule/sftp" xmlns:http="http://www.mulesoft.org/schema/mule/http" xmlns:batch="http://www.mulesoft.org/schema/mule/batch" xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:spring="http://www.springframework.org/schema/beans" 
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans http://www.springframework.org/schema/beans/spring-beans-current.xsd
+http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/batch http://www.mulesoft.org/schema/mule/batch/current/mule-batch.xsd
+http://www.mulesoft.org/schema/mule/ee/dw http://www.mulesoft.org/schema/mule/ee/dw/current/dw.xsd
+http://www.mulesoft.org/schema/mule/sftp http://www.mulesoft.org/schema/mule/sftp/current/mule-sftp.xsd">
+    <http:listener-config name="HTTP_Listener_Configuration" host="0.0.0.0" port="8085" doc:name="HTTP Listener Configuration"/>
+    <flow name="batchpocFlow">
+        <http:listener config-ref="HTTP_Listener_Configuration" path="/abc" doc:name="HTTP"/>
+        <dw:transform-message doc:name="Transform Message">
+            <dw:set-payload><![CDATA[%dw 1.0
+%output application/java
+---
+payload map $.account]]></dw:set-payload>
+        </dw:transform-message>
+        <async doc:name="Async">
+            <batch:execute name="batchpocBatch" doc:name="Batch Execute"/>
+        </async>
+    </flow>
+    <batch:job name="batchpocBatch">
+        <batch:process-records>
+            <batch:step name="Batch_Step">
+                <dw:transform-message doc:name="Transform Message">
+                    <dw:set-payload><![CDATA[%dw 1.0
+%output application/csv 
+---
+payload map (account, indexofaccount) ->
+{
+	ExternalId: account.ExternalId,
+	RecordType: account.RecordType,
+	ExternalEntityId: account.ExternalEntityId,
+	SourceSystem: account.SourceSystem 
+}		]]></dw:set-payload>
+                </dw:transform-message>
+                <sftp:outbound-endpoint exchange-pattern="one-way" outputPattern="abc12.csv" host="localhost" port="22" path="/GR1/DEV/error/account/" user="tester" password="password" responseTimeout="10000" doc:name="SFTP"/>
+            </batch:step>
+        </batch:process-records>
+        <batch:on-complete>
+            <logger message="HIi" level="INFO" doc:name="Logger"/>
+        </batch:on-complete>
+    </batch:job>
+</mule>
